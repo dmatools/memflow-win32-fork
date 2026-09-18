@@ -8,7 +8,7 @@ description = "win32 integration of the memflow physical memory introspection fr
 documentation = "https://docs.rs/memflow-win32"
 readme = "../README.md"
 homepage = "https://memflow.io"
-repository = "https://github.com/memflow/memflow-win32"
+repository = "https://github.com/dmatools/memflow-win32-fork"
 license = "MIT"
 keywords = [ "memflow", "introspection", "memory", "dma" ]
 categories = [ "api-bindings", "memory-management", "os" ]
@@ -21,7 +21,7 @@ codecov = { repository = "github", branch = "master", service = "github" }
 crate-type = ["lib", "cdylib"]
 
 [dependencies]
-memflow = { version = "0.2", default-features = false }
+memflow = { version = "0.2", git = "https://github.com/dmatools/memflow-fork", branch = "main", default-features = false }
 log = { version = "0.4", default-features = false }
 pelite = { version = "0.10", default-features = false }
 widestring = { version = "1.1", default-features = false, features = ["alloc"] }
@@ -40,7 +40,7 @@ toml = "0.8"
 [build-dependencies]
 toml = "0.8"
 serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
-memflow = { version = "0.2", default-features = false }
+memflow = { version = "0.2", git = "https://github.com/dmatools/memflow-fork", branch = "main", default-features = false }
 memflow-win32-defs = { version = "0.2", path = "../memflow-win32-defs", features = ["symstore"] }
 
 [features]

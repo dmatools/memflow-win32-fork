@@ -7,13 +7,13 @@ description = "static offset templates for "
 documentation = "https://docs.rs/memflow-win32-defs"
 readme = "../README.md"
 homepage = "https://memflow.io"
-repository = "https://github.com/memflow/memflow-win32"
+repository = "https://github.com/dmatools/memflow-win32-fork"
 license = "MIT"
 keywords = [ "memflow", "introspection", "memory", "dma" ]
 categories = [ "api-bindings", "memory-management", "os" ]
 
 [dependencies]
-memflow = { version = "0.2", default-features = false }
+memflow = { version = "0.2", git = "https://github.com/dmatools/memflow-fork", branch = "main", default-features = false }
 log = { version = "0.4", default-features = false }
 no-std-compat = { version = "0.4", features = ["alloc"] }
 serde = { version = "1.0", default-features = false, optional = true, features = ["derive"] }
