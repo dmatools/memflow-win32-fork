@@ -6,6 +6,7 @@ use memflow::types::{mem, umem, Address};
 
 #[allow(clippy::unnecessary_cast)]
 const SIZE_4KB: u64 = mem::kb(4) as u64;
+const DESCRIPTOR_READ_ATTEMPTS: usize = 3;
 
 /// The maximum number of physical-memory runs accepted from Windows.
 pub const PHYSICAL_MEMORY_MAX_RUNS: usize = 32;
@@ -49,15 +50,22 @@ pub(super) fn parse<T: MemoryView, U: DescriptorWord>(
     trace!("found phys_mem_block pointer at: {}", descriptor_ptr);
 
     let descriptor_size = U::BYTES * (2 + PHYSICAL_MEMORY_MAX_RUNS * 2);
-    let descriptor = virt_mem.read_raw(descriptor_ptr, descriptor_size).ok()?;
-    let runs = decode_descriptor::<U>(&descriptor)?;
-
-    let mut memory_map = MemoryMap::new();
-    for (base, size) in runs {
-        trace!("adding memory mapping: base={:x} size={:x}", base, size);
-        memory_map.push_remap(base.into(), size as umem, Address::from(base));
+    for attempt in 1..=DESCRIPTOR_READ_ATTEMPTS {
+        let Ok(descriptor) = virt_mem.read_raw(descriptor_ptr, descriptor_size) else {
+            info!("failed phys_mem_block read attempt {attempt}/{DESCRIPTOR_READ_ATTEMPTS}");
+            continue;
+        };
+        if let Some(runs) = decode_descriptor::<U>(&descriptor) {
+            let mut memory_map = MemoryMap::new();
+            for (base, size) in runs {
+                trace!("adding memory mapping: base={:x} size={:x}", base, size);
+                memory_map.push_remap(base.into(), size as umem, Address::from(base));
+            }
+            return Some(memory_map);
+        }
+        info!("invalid phys_mem_block read attempt {attempt}/{DESCRIPTOR_READ_ATTEMPTS}");
     }
-    Some(memory_map)
+    None
 }
 
 fn decode_descriptor<U: DescriptorWord>(descriptor: &[u8]) -> Option<Vec<(u64, u64)>> {
