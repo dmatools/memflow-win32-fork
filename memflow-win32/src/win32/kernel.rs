@@ -43,6 +43,7 @@ pub struct Win32Kernel<T, V> {
     pub sysproc_dtb: Address,
 
     pub kernel_modules: Option<Win32ModuleListInfo>,
+    physical_memory_map: Option<Vec<PhysicalMemoryMapping>>,
 }
 
 impl<T: 'static + PhysicalMemory + Clone, V: 'static + VirtualTranslate2 + Clone>
@@ -56,44 +57,28 @@ impl<T: 'static + PhysicalMemory + Clone, V: 'static + VirtualTranslate2 + Clone
             vat,
         );
 
-        if offsets.phys_mem_block() != 0 {
-            match kernel_info.os_info.arch.into_obj().bits() {
-                32 => {
-                    if let Some(mem_map) = mem_map::parse::<_, u32>(
-                        &mut virt_mem,
-                        kernel_info.os_info.base + offsets.phys_mem_block(),
-                    ) {
-                        // update mem mapping in connector
-                        info!("updating connector mem_map={:?}", mem_map);
-                        let (mut phys_mem, vat) = virt_mem.into_inner();
-                        phys_mem.set_mem_map(mem_map.into_vec().as_slice());
-                        virt_mem = VirtualDma::with_vat(
-                            phys_mem,
-                            kernel_info.os_info.arch,
-                            Win32VirtualTranslate::new(kernel_info.os_info.arch, kernel_info.dtb),
-                            vat,
-                        );
-                    }
+        let physical_memory_map = (offsets.phys_mem_block() != 0)
+            .then(|| {
+                let address = kernel_info.os_info.base + offsets.phys_mem_block();
+                match kernel_info.os_info.arch.into_obj().bits() {
+                    32 => mem_map::parse::<_, u32>(&mut virt_mem, address),
+                    64 => mem_map::parse::<_, u64>(&mut virt_mem, address),
+                    _ => None,
                 }
-                64 => {
-                    if let Some(mem_map) = mem_map::parse::<_, u64>(
-                        &mut virt_mem,
-                        kernel_info.os_info.base + offsets.phys_mem_block(),
-                    ) {
-                        // update mem mapping in connector
-                        info!("updating connector mem_map={:?}", mem_map);
-                        let (mut phys_mem, vat) = virt_mem.into_inner();
-                        phys_mem.set_mem_map(mem_map.into_vec().as_slice());
-                        virt_mem = VirtualDma::with_vat(
-                            phys_mem,
-                            kernel_info.os_info.arch,
-                            Win32VirtualTranslate::new(kernel_info.os_info.arch, kernel_info.dtb),
-                            vat,
-                        );
-                    }
-                }
-                _ => {}
-            }
+            })
+            .flatten()
+            .map(|memory_map| memory_map.into_vec());
+
+        if let Some(memory_map) = &physical_memory_map {
+            info!("updating connector mem_map={:?}", memory_map);
+            let (mut phys_mem, vat) = virt_mem.into_inner();
+            phys_mem.set_mem_map(memory_map);
+            virt_mem = VirtualDma::with_vat(
+                phys_mem,
+                kernel_info.os_info.arch,
+                Win32VirtualTranslate::new(kernel_info.os_info.arch, kernel_info.dtb),
+                vat,
+            );
         }
 
         // start_block only contains the winload's dtb which might
@@ -128,7 +113,16 @@ impl<T: 'static + PhysicalMemory + Clone, V: 'static + VirtualTranslate2 + Clone
             kernel_info,
             sysproc_dtb,
             kernel_modules: None,
+            physical_memory_map,
         }
+    }
+
+    /// Returns the physical RAM ranges discovered from `MmPhysicalMemoryBlock`.
+    ///
+    /// `None` means that this Windows kernel did not expose a usable physical
+    /// memory map during initialization.
+    pub fn physical_memory_map(&self) -> Option<&[PhysicalMemoryMapping]> {
+        self.physical_memory_map.as_deref()
     }
 
     pub fn kernel_modules(&mut self) -> Result<Win32ModuleListInfo> {
